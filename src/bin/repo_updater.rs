@@ -52,6 +52,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for entry in entries {
             let entry = entry.unwrap();
             let path = entry.path();
+
             if path.is_dir() {
                 dirs.push(path.to_str().unwrap().to_string());
             }
@@ -72,9 +73,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 sleep(Duration::from_millis(100));
             }
 
-            let mut dirs = directories.lock().unwrap();
+            loop {
+                let mut dirs = directories.lock().unwrap();
 
-            if dirs.len() > 0 {
+                if dirs.is_empty() {
+                    break;
+                }
+
                 let dir = dirs.pop().unwrap();
 
                 drop(dirs);
@@ -82,8 +87,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if is_git_repo(&dir) {
                     println!("Updating: {}", dir);
 
+                    let remote = std::process::Command::new("git")
+                        .arg("remote")
+                        .current_dir(&dir)
+                        .output()
+                        .expect("failed to obtain remote");
+
+                    let remote = String::from_utf8_lossy(&remote.stdout).trim().to_string();
+
+                    let branch = std::process::Command::new("git")
+                        .arg("branch")
+                        .current_dir(&dir)
+                        .output()
+                        .expect("failed to obtain branch");
+
+                    let branch = String::from_utf8_lossy(&branch.stdout).trim().to_string();
+
+                    let branch = branch.replace('*', "");
+
+                    let branch = branch.trim();
+
                     let output = std::process::Command::new("git")
                         .arg("pull")
+                        .args(vec![remote, branch.to_string()])
                         .current_dir(&dir)
                         .output()
                         .expect("failed to execute process");
